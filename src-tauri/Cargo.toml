@@ -1,0 +1,19 @@
+
+[package]
+name = "caja-sonidos"
+version = "1.0.0"
+authors = ["Mauricio <mauricio@ejemplo.com>"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.5", features = ["fs-read-dir", "fs-read-file", "fs-write-file", "fs-create-dir", "fs-exists", "path-all", "dialog-open", "protocol-asset"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+# Required by `tauri build` to serve the bundled frontend
+custom-protocol = ["tauri/custom-protocol"]
+default = ["custom-protocol"]

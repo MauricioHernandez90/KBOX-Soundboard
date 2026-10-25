@@ -1,0 +1,13 @@
+{
+  "appId": "com.mauricio.kbox",
+  "appName": "KBOX",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "KBOX",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "fs": {
+        "all": false,
+        "readDir": true,
+        "readFile": true,
+        "writeFile": true,
+        "createDir": true,
+        "exists": true,
+        "scope": {
+          "allow": ["**", "/**", "$RESOURCE/**", "$APPCONFIG", "$APPCONFIG/**"],
+          "requireLiteralLeadingDot": false
+        }
+      },
+      "path": {
+        "all": true
+      },
+      "dialog": {
+        "all": false,
+        "open": true
+      },
+      "protocol": {
+        "all": false,
+        "asset": true,
+        "assetScope": ["**"]
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "Music",
+      "copyright": "Mauricio <mauricio@ejemplo.com>",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [],
+      "icon": [
+        "icons/icon.png"
+      ],
+      "identifier": "com.mauricio.kbox",
+      "longDescription": "",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "shortDescription": "Caja de sonidos para shows",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "wix": {},
+        "nsis": {}
+      },
+      "resources": [
+        "sonidos-default/**/*",
+        "WebView2Loader.dll"
+      ]
+    },
+    "security": {
+      "csp": "default-src 'self'; media-src 'self' asset: https://asset.localhost blob:; img-src 'self' data: asset:"
+    },
+    "windows": [
+      {
+        "title": "KBOX",
+        "width": 1280,
+        "height": 800,
+        "resizable": true,
+        "alwaysOnTop": false,
+        "fileDropEnabled": false
+      }
+    ]
+  }
+}
