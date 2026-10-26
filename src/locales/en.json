@@ -1,0 +1,14 @@
+{
+  "library": "Library",
+  "workspaces": "Workspaces",
+  "panic": "PANIC",
+  "import_folder": "Import Folder",
+  "import_file": "Import File",
+  "sync": "Sync",
+  "search_placeholder": "Search sound or category...",
+  "all": "All",
+  "library_subfolders": "Library / Subfolders",
+  "scanning": "Syncing... {count} files found",
+  "delete_category": "Delete category",
+  "language": "Language"
+}

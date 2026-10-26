@@ -21,6 +21,7 @@
     "audiobuffer-to-wav": "^1.0.0",
     "howler": "^2.2.4",
     "vue": "^3.4.0",
+    "vue-i18n": "^9.14.5",
     "wavesurfer.js": "^8.0.3"
   },
   "devDependencies": {

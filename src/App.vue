@@ -4,13 +4,13 @@
       <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
         <img src="/kbox-icon.png" alt="KBOX Logo" class="h-8 md:h-10 w-auto object-contain" />
         <div class="flex rounded-full bg-zinc-900 border border-zinc-800 p-1 text-xs font-black tracking-wider">
-          <button @click="viewMode = 'library'" :class="['px-4 py-1.5 rounded-full transition', viewMode === 'library' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white']">BIBLIOTECA</button>
-          <button @click="viewMode = 'workspace'" :class="['px-4 py-1.5 rounded-full transition', viewMode === 'workspace' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white']">MESAS DE TRABAJO</button>
+          <button @click="viewMode = 'library'" :class="['px-4 py-1.5 rounded-full transition', viewMode === 'library' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white']">{{ $t('library').toUpperCase() }}</button>
+          <button @click="viewMode = 'workspace'" :class="['px-4 py-1.5 rounded-full transition', viewMode === 'workspace' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white']">{{ $t('workspaces').toUpperCase() }}</button>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <div v-if="viewMode === 'library'" class="relative">
             <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <input v-model="search" placeholder="Buscar sonido o categoría..."
+            <input v-model="search" :placeholder="$t('search_placeholder')"
               class="w-64 rounded-full bg-zinc-900 border border-zinc-800 pl-9 pr-4 py-2 text-sm outline-none focus:border-lime-400 placeholder:text-zinc-600" />
           </div>
           <label class="flex items-center gap-2 text-xs text-zinc-400 font-bold tracking-wider">
@@ -20,33 +20,36 @@
           <button @click="stopAll" class="rounded-full bg-red-600 hover:bg-red-500 active:scale-95 px-5 py-2 text-sm font-black tracking-wider shadow-lg shadow-red-600/40 transition">
             PANIC [ESC]
           </button>
+          <button @click="toggleLang" :title="$t('language')" class="rounded-full bg-zinc-900 border border-zinc-700 hover:border-white px-3 py-2 text-xs font-black tracking-wider transition">
+            <span :class="locale === 'es' ? 'text-lime-400' : 'text-zinc-500'">ES</span> / <span :class="locale === 'en' ? 'text-lime-400' : 'text-zinc-500'">EN</span>
+          </button>
           <template v-if="isTauri || isCapacitor">
             <button @click="importFolder" :disabled="isScanning" class="rounded-full bg-white text-black hover:bg-zinc-200 disabled:opacity-40 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
-              IMPORTAR CARPETA
+              {{ $t('import_folder').toUpperCase() }}
             </button>
             <button @click="importFiles" :disabled="isScanning" class="rounded-full bg-white text-black hover:bg-zinc-200 disabled:opacity-40 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
-              IMPORTAR ARCHIVO
+              {{ $t('import_file').toUpperCase() }}
             </button>
             <button @click="syncLibrary" :disabled="isScanning" class="rounded-full bg-zinc-900 border border-zinc-700 hover:border-white disabled:opacity-40 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
-              🔄 SINCRONIZAR
+              🔄 {{ $t('sync').toUpperCase() }}
             </button>
           </template>
           <label v-else class="rounded-full bg-white text-black hover:bg-zinc-200 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
-            IMPORTAR CARPETA
+            {{ $t('import_folder').toUpperCase() }}
             <input type="file" webkitdirectory directory multiple @change="onFolderPicked" class="hidden" />
           </label>
         </div>
       </div>
     </header>
-    <div v-if="isScanning" class="mx-6 mt-3 rounded bg-lime-950 border border-lime-600 text-lime-200 text-xs font-bold tracking-wider p-3 animate-pulse">Sincronizando... {{ scanCount }} archivos encontrados</div>
+    <div v-if="isScanning" class="mx-6 mt-3 rounded bg-lime-950 border border-lime-600 text-lime-200 text-xs font-bold tracking-wider p-3 animate-pulse">{{ $t('scanning', { count: scanCount }) }}</div>
 
     <div class="flex flex-col md:flex-row flex-1 min-h-0">
     <aside v-if="viewMode === 'library'" class="w-full md:w-64 shrink-0 border-b md:border-b-0 md:border-r border-zinc-800 bg-zinc-950 p-3 md:overflow-y-auto md:sticky md:top-[73px] md:h-[calc(100vh-73px)]">
-      <p class="text-[11px] tracking-[0.2em] text-zinc-500 font-bold mb-3">BIBLIOTECA / SUBCARPETAS</p>
+      <p class="text-[11px] tracking-[0.2em] text-zinc-500 font-bold mb-3">{{ $t('library_subfolders').toUpperCase() }}</p>
       <div class="flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-1 md:pb-0">
         <button @click="activeCat = ''"
           :class="['shrink-0 md:w-full flex justify-between items-center gap-3 text-left px-3 py-2.5 rounded-lg border text-xs font-bold tracking-wider uppercase transition', activeCat === '' ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800']">
-          <span>TODAS</span><span class="opacity-60">{{ totalSounds }}</span>
+          <span>{{ $t('all').toUpperCase() }}</span><span class="opacity-60">{{ totalSounds }}</span>
         </button>
         <button v-for="cat in combinedLibrary" :key="cat.name" @click="activeCat = activeCat === cat.name ? '' : cat.name"
           :class="['shrink-0 md:w-full flex justify-between items-center gap-3 text-left px-3 py-2.5 rounded-lg border text-xs font-bold tracking-wider uppercase transition',
@@ -56,7 +59,7 @@
           <span class="truncate">{{ isUserCategory(cat) ? '📁 ' : '' }}{{ cat.name }}</span>
           <span class="flex items-center gap-2">
             <span class="opacity-60">{{ cat.sounds.length }}</span>
-            <span v-if="isUserCategory(cat)" role="button" title="Eliminar categoría" @click.stop="deleteCategory(cat.name)" class="px-1 hover:scale-125 transition">🗑️</span>
+            <span v-if="isUserCategory(cat)" role="button" :title="$t('delete_category')" @click.stop="deleteCategory(cat.name)" class="px-1 hover:scale-125 transition">🗑️</span>
           </span>
         </button>
       </div>
@@ -227,12 +230,20 @@ import { convertFileSrc } from '@tauri-apps/api/tauri'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { Preferences } from '@capacitor/preferences'
+import { useI18n } from 'vue-i18n'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
 
 const isCapacitor = Capacitor.isNativePlatform()
 const CAP_DIR = Directory.External
 const CAP_DEFAULT_ROOT = 'KBOX'
 const WORKSPACES_PREF_KEY = 'kbox_workspaces'
+const LANG_KEY = 'kbox_lang'
+
+const { locale } = useI18n()
+function toggleLang() {
+  locale.value = locale.value === 'es' ? 'en' : 'es'
+  try { localStorage.setItem(LANG_KEY, locale.value) } catch (err) { console.warn('No se pudo guardar el idioma:', err) }
+}
 const SUPPORTED = ['mp3', 'wav', 'ogg', 'mp4', 'm4a', 'flac', 'webm', 'aac']
 const isTauri = typeof window !== 'undefined' && ('__TAURI_IPC__' in window || '__TAURI__' in window)
 

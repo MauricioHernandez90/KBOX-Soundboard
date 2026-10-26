@@ -1,0 +1,14 @@
+{
+  "library": "Biblioteca",
+  "workspaces": "Mesas de Trabajo",
+  "panic": "PANIC",
+  "import_folder": "Importar Carpeta",
+  "import_file": "Importar Archivo",
+  "sync": "Sincronizar",
+  "search_placeholder": "Buscar sonido o categoría...",
+  "all": "Todas",
+  "library_subfolders": "Biblioteca / Subcarpetas",
+  "scanning": "Sincronizando... {count} archivos encontrados",
+  "delete_category": "Eliminar categoría",
+  "language": "Idioma"
+}
