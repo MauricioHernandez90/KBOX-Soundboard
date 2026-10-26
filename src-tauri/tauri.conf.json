@@ -18,9 +18,13 @@
         "readFile": true,
         "writeFile": true,
         "createDir": true,
+        "copyFile": true,
+        "removeFile": true,
+        "renameFile": true,
+        "removeDir": true,
         "exists": true,
         "scope": {
-          "allow": ["**", "/**", "$RESOURCE/**", "$APPCONFIG", "$APPCONFIG/**"],
+          "allow": ["**", "/**", "$RESOURCE/**", "$APPCONFIG", "$APPCONFIG/**", "$APPDATA", "$APPDATA/**"],
           "requireLiteralLeadingDot": false
         }
       },

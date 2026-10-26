@@ -20,16 +20,25 @@
           <button @click="stopAll" class="rounded-full bg-red-600 hover:bg-red-500 active:scale-95 px-5 py-2 text-sm font-black tracking-wider shadow-lg shadow-red-600/40 transition">
             PANIC [ESC]
           </button>
-          <button v-if="isTauri || isCapacitor" @click="isCapacitor ? loadFromCapacitor() : loadFromTauri()" class="rounded-full bg-white text-black hover:bg-zinc-200 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
-            CARGAR CARPETA RAIZ
-          </button>
+          <template v-if="isTauri || isCapacitor">
+            <button @click="importFolder" :disabled="isScanning" class="rounded-full bg-white text-black hover:bg-zinc-200 disabled:opacity-40 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
+              IMPORTAR CARPETA
+            </button>
+            <button @click="importFiles" :disabled="isScanning" class="rounded-full bg-white text-black hover:bg-zinc-200 disabled:opacity-40 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
+              IMPORTAR ARCHIVO
+            </button>
+            <button @click="syncLibrary" :disabled="isScanning" class="rounded-full bg-zinc-900 border border-zinc-700 hover:border-white disabled:opacity-40 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
+              🔄 SINCRONIZAR
+            </button>
+          </template>
           <label v-else class="rounded-full bg-white text-black hover:bg-zinc-200 px-5 py-2 text-sm font-black tracking-wider cursor-pointer transition">
-            CARGAR CARPETA RAIZ
+            IMPORTAR CARPETA
             <input type="file" webkitdirectory directory multiple @change="onFolderPicked" class="hidden" />
           </label>
         </div>
       </div>
     </header>
+    <div v-if="isScanning" class="mx-6 mt-3 rounded bg-lime-950 border border-lime-600 text-lime-200 text-xs font-bold tracking-wider p-3 animate-pulse">Sincronizando... {{ scanCount }} archivos encontrados</div>
 
     <div class="flex flex-col md:flex-row flex-1 min-h-0">
     <aside v-if="viewMode === 'library'" class="w-full md:w-64 shrink-0 border-b md:border-b-0 md:border-r border-zinc-800 bg-zinc-950 p-3 md:overflow-y-auto md:sticky md:top-[73px] md:h-[calc(100vh-73px)]">
@@ -40,8 +49,15 @@
           <span>TODAS</span><span class="opacity-60">{{ totalSounds }}</span>
         </button>
         <button v-for="cat in combinedLibrary" :key="cat.name" @click="activeCat = activeCat === cat.name ? '' : cat.name"
-          :class="['shrink-0 md:w-full flex justify-between items-center gap-3 text-left px-3 py-2.5 rounded-lg border text-xs font-bold tracking-wider uppercase transition', activeCat === cat.name ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800']">
-          <span class="truncate">{{ cat.name }}</span><span class="opacity-60">{{ cat.sounds.length }}</span>
+          :class="['shrink-0 md:w-full flex justify-between items-center gap-3 text-left px-3 py-2.5 rounded-lg border text-xs font-bold tracking-wider uppercase transition',
+            activeCat === cat.name ? 'bg-white text-black border-white'
+              : isUserCategory(cat) ? 'bg-lime-950/40 text-lime-400 border-lime-800/50 hover:bg-lime-950/70'
+              : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800']">
+          <span class="truncate">{{ isUserCategory(cat) ? '📁 ' : '' }}{{ cat.name }}</span>
+          <span class="flex items-center gap-2">
+            <span class="opacity-60">{{ cat.sounds.length }}</span>
+            <span v-if="isUserCategory(cat)" role="button" title="Eliminar categoría" @click.stop="deleteCategory(cat.name)" class="px-1 hover:scale-125 transition">🗑️</span>
+          </span>
         </button>
       </div>
       <p v-if="!combinedLibrary.length" class="text-zinc-600 text-xs mt-3">
@@ -49,7 +65,7 @@
       </p>
     </aside>
 
-    <div v-if="debugError" class="mx-6 mt-3 rounded bg-red-950 border border-red-700 text-red-200 text-xs font-mono p-3 break-all select-text" @click="debugError = ''">{{ debugError }}</div>
+        <div v-if="debugError" class="mx-6 mt-3 rounded bg-red-950 border border-red-700 text-red-200 text-xs font-mono p-3 break-all select-text" @click="debugError = ''">{{ debugError }}</div>
     <main v-if="viewMode === 'workspace'" class="flex-1 min-w-0 p-4 md:p-6">
       <div class="flex flex-wrap items-center gap-3 mb-4">
         <select v-model="activeWorkspaceId" :disabled="!workspaces.length"
@@ -143,7 +159,52 @@
           <p v-if="!workspaces.length" class="text-sm text-zinc-500 py-2">Aún no hay mesas. Crea una para asignar este sonido.</p>
         </div>
         <button @click="createWorkspaceAndAssign" class="min-h-[56px] w-full rounded-xl bg-lime-400 hover:bg-lime-300 text-black text-base font-black tracking-wider transition">+ NUEVA MESA</button>
+        <button v-if="soundToAssign.isImported" @click="soundToAssign && renameSound(soundToAssign)" class="min-h-[56px] w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base font-black tracking-wider transition">Cambiar nombre</button>
+        <button v-if="soundToAssign.isImported" @click="openEditor(soundToAssign)" class="min-h-[56px] w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-lime-400/40 text-lime-400 text-base font-black tracking-wider transition">Editar audio</button>
+        <button v-if="soundToAssign.isImported" @click="deleteImportedSound(soundToAssign)" class="min-h-[56px] w-full rounded-xl bg-zinc-900 border border-red-700 text-red-400 hover:bg-red-950 text-base font-black tracking-wider transition">Eliminar audio</button>
         <button @click="soundToAssign = null" class="min-h-[56px] w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 text-base font-bold transition">CANCELAR</button>
+      </div>
+    </div>
+
+    <div v-if="editingSound" class="fixed inset-0 z-50 bg-black/90 flex flex-col p-4 gap-3 overflow-y-auto">
+      <p class="text-[11px] tracking-[0.2em] text-zinc-500 font-bold">EDITAR AUDIO · {{ editingSound.displayName }}</p>
+      <div class="relative w-full h-32 bg-zinc-800 rounded-lg overflow-hidden">
+        <div ref="waveformRef" class="absolute inset-0 w-full h-full object-fill opacity-50"></div>
+        <div v-if="editDuration" class="absolute top-0 bottom-0 bg-lime-500/40 z-10 pointer-events-none"
+          :style="{ left: (editStart / editDuration * 100) + '%', right: (100 - (editEnd / editDuration * 100)) + '%' }"></div>
+        <input type="range" min="0" :max="editDuration" step="0.01" v-model.number="editStart" @input="onStartInput" :disabled="!editReady"
+          class="range-dual absolute top-0 left-0 w-full h-full z-20" aria-label="Inicio" />
+        <input type="range" min="0" :max="editDuration" step="0.01" v-model.number="editEnd" @input="onEndInput" :disabled="!editReady"
+          class="range-dual absolute top-0 left-0 w-full h-full z-30" aria-label="Fin" />
+      </div>
+      <button @click="toggleEditPlay" :disabled="!editReady" class="min-h-[56px] w-full rounded-xl bg-lime-400 hover:bg-lime-300 disabled:opacity-40 text-black text-2xl font-black transition">{{ editPlaying ? '⏸' : '▶' }}</button>
+      <div class="flex justify-between text-sm text-zinc-300">
+        <span>Inicio: {{ editStart.toFixed(2) }} s</span>
+        <span>Fin: {{ editEnd.toFixed(2) }} s</span>
+      </div>
+      <input type="text" v-model="editName" placeholder="Nombre del archivo" class="min-h-[56px] w-full rounded-xl bg-zinc-950 border border-zinc-700 focus:border-lime-400 outline-none px-4 text-base" />
+      <select v-model="editCategory" class="min-h-[56px] w-full rounded-xl bg-zinc-950 border border-zinc-700 px-4 text-base text-white">
+        <option v-for="name in combinedLibrary.map(c => c.name)" :key="name" :value="name">{{ name }}</option>
+      </select>
+      <button @click="saveClip" :disabled="!editReady || editSaving" class="min-h-[56px] w-full rounded-xl bg-lime-400 hover:bg-lime-300 disabled:opacity-40 text-black text-base font-black tracking-wider transition">{{ editSaving ? 'Guardando...' : 'Guardar Recorte' }}</button>
+      <button @click="closeEditor" :disabled="editSaving" class="min-h-[56px] w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-base font-bold transition">Cancelar</button>
+    </div>
+
+    <div v-if="filesToImport.length > 0" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" @click.self="!importing && resetImportModal()">
+      <div class="w-full max-w-md max-h-[90vh] flex flex-col rounded-2xl bg-zinc-900 border border-zinc-700 p-5 gap-3">
+        <p class="text-[11px] tracking-[0.2em] text-zinc-500 font-bold">IMPORTAR {{ filesToImport.length }} ARCHIVO(S)</p>
+        <p class="text-lg font-bold leading-tight">¿En qué categoría quieres guardarlos?</p>
+        <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
+          <button v-for="name in combinedLibrary.map(c => c.name)" :key="name" @click="selectedCategory = name; newCategory = ''"
+            :class="['min-h-[56px] w-full text-left text-base px-4 rounded-xl font-bold truncate transition',
+              selectedCategory === name && !newCategory.trim() ? 'bg-lime-400 text-black' : 'bg-zinc-800 hover:bg-zinc-700']">{{ name }}</button>
+          <p v-if="!combinedLibrary.length" class="text-sm text-zinc-500 py-2">Aún no hay categorías. Escribe una nueva.</p>
+        </div>
+        <input v-model="newCategory" @input="selectedCategory = ''" placeholder="O escribe una categoría nueva..."
+          class="min-h-[56px] w-full rounded-xl bg-zinc-950 border border-zinc-700 focus:border-lime-400 outline-none px-4 text-base placeholder:text-zinc-600" />
+        <button @click="confirmImport(newCategory.trim() || selectedCategory)" :disabled="importing || !(newCategory.trim() || selectedCategory)"
+          class="min-h-[56px] w-full rounded-xl bg-lime-400 hover:bg-lime-300 disabled:opacity-40 text-black text-base font-black tracking-wider transition">{{ importing ? 'Importando...' : 'Importar a esta categoría' }}</button>
+        <button @click="resetImportModal" :disabled="importing" class="min-h-[56px] w-full rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-base font-bold transition">Cancelar</button>
       </div>
     </div>
 
@@ -155,20 +216,23 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Howl } from 'howler'
+import WaveSurfer from 'wavesurfer.js'
+import audioBufferToWav from 'audiobuffer-to-wav'
 import { open } from '@tauri-apps/api/dialog'
-import { readDir, readBinaryFile as readFile, readTextFile, writeTextFile, createDir, exists } from '@tauri-apps/api/fs'
-import { appConfigDir, join, resolveResource } from '@tauri-apps/api/path'
+import { readDir, readBinaryFile as readFile, readTextFile, writeTextFile, writeBinaryFile, createDir, exists, copyFile, removeFile, renameFile, removeDir } from '@tauri-apps/api/fs'
+import { appConfigDir, appDataDir, join, resolveResource } from '@tauri-apps/api/path'
 import { convertFileSrc } from '@tauri-apps/api/tauri'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { Preferences } from '@capacitor/preferences'
+import { FilePicker } from '@capawesome/capacitor-file-picker'
 
 const isCapacitor = Capacitor.isNativePlatform()
-const CAP_DIR = Directory.Documents
+const CAP_DIR = Directory.External
 const CAP_DEFAULT_ROOT = 'KBOX'
-const CAP_PREF_KEY = 'kbox_root'
+const WORKSPACES_PREF_KEY = 'kbox_workspaces'
 const SUPPORTED = ['mp3', 'wav', 'ogg', 'mp4', 'm4a', 'flac', 'webm', 'aac']
 const isTauri = typeof window !== 'undefined' && ('__TAURI_IPC__' in window || '__TAURI__' in window)
 
@@ -218,7 +282,7 @@ const chipClass = (active) => [
 ]
 
 let counter = 0
-function makeSound(category, fileName, url, rawPath = null) {
+function makeSound(category, fileName, url, rawPath = null, isImported = false) {
   const dot = fileName.lastIndexOf('.')
   return ref({
     id: `s${counter++}`,
@@ -227,6 +291,7 @@ function makeSound(category, fileName, url, rawPath = null) {
     category,
     url,
     rawPath,
+    isImported,
     playing: false,
     vol: 1,
     loop: false
@@ -261,67 +326,528 @@ async function onFolderPicked(e) {
   e.target.value = ''
 }
 
-// Tauri: lectura recursiva con readDir + convertFileSrc
-async function loadFromTauri() {
-  const root = await open({ directory: true, multiple: false, recursive: true })
-  if (!root || Array.isArray(root)) return
+const CAP_MUSIC_FOLDERS = ['Music', 'Música']
+const isMusicPath = (p) => CAP_MUSIC_FOLDERS.some(m => p === m || p.startsWith(m + '/'))
+// Las rutas bajo Music/ viven en el almacenamiento externo; el resto en Documents
+const capDirFor = (path) => (isMusicPath(path) ? Directory.ExternalStorage : CAP_DIR)
 
-  if (loadedRoots.has(root)) return
+const isScanning = ref(false)
+const scanCount = ref(0)
+
+const cleanName = (n) => n.replace(/[\\/:*?"<>|]/g, '_').replace(/^\.+/, '').trim()
+const baseName = (p) => p.split(/[\\/]/).pop()
+const sortSounds = (list) => list.sort((x, y) => x.displayName.localeCompare(y.displayName, undefined, { numeric: true }))
+
+function groupsToLibrary(groups) {
+  return [...groups]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    .map(([name, sounds]) => ({ name, sounds: sortSounds(sounds) }))
+}
+
+// Android: lectura recursiva (A > B > C). La categoría es la carpeta que contiene el archivo.
+async function scanDirectory(path, categoryName, dirType, acc = new Map()) {
+  let files
   try {
-    const cats = await loadLibraryFromPath(root)
-    loadedRoots.add(root)
-    userLibrary.value = [...userLibrary.value, ...cats]
+    ({ files } = await Filesystem.readdir({ path, directory: dirType }))
   } catch (err) {
-    debugError.value = 'Error cargando carpeta: ' + err
-    return
+    console.warn('No se pudo leer', path, err)
+    return acc
   }
-  await saveRoute(root)
+  for (const f of files) {
+    if (f.name.startsWith('.')) continue
+    const childPath = `${path}/${f.name}`
+    if (f.type === 'directory') {
+      await scanDirectory(childPath, f.name, dirType, acc)
+    } else if (SUPPORTED.includes(extOf(f.name))) {
+      if (!acc.has(categoryName)) acc.set(categoryName, [])
+      acc.get(categoryName).push(makeSound(categoryName, f.name, '', childPath, dirType === CAP_DIR))
+      scanCount.value++
+    }
+  }
+  return acc
 }
 
-// Capacitor (Android): lee Documents/<root>/<categoria>/<archivo>
-async function loadCapacitorLibrary(root) {
-  const cats = []
-  const { files: top } = await Filesystem.readdir({ path: root, directory: CAP_DIR })
-  for (const dir of top) {
-    if (dir.type !== 'directory' || dir.name.startsWith('.')) continue
-    const { files } = await Filesystem.readdir({ path: `${root}/${dir.name}`, directory: CAP_DIR })
-    const sounds = files
-      .filter(f => f.type !== 'directory' && !f.name.startsWith('.') && SUPPORTED.includes(extOf(f.name)))
-      .map(f => makeSound(dir.name, f.name, '', `${root}/${dir.name}/${f.name}`))
-      .sort((x, y) => x.displayName.localeCompare(y.displayName, undefined, { numeric: true }))
-    if (sounds.length) cats.push({ name: dir.name, sounds })
-  }
-  return cats
-}
-
-async function loadFromCapacitor(root) {
-  root = typeof root === 'string' ? root : CAP_DEFAULT_ROOT
+async function syncCapacitor() {
   try {
     await Filesystem.requestPermissions()
-    try {
-      await Filesystem.readdir({ path: root, directory: CAP_DIR })
-    } catch {
-      await Filesystem.mkdir({ path: root, directory: CAP_DIR, recursive: true })
-    }
-    const cats = await loadCapacitorLibrary(root)
-    if (!loadedRoots.has(root)) userLibrary.value = [...userLibrary.value, ...cats]
-    loadedRoots.add(root)
-    await Preferences.set({ key: CAP_PREF_KEY, value: root })
-    if (!cats.length) debugError.value = `Copia tus sonidos en Documents/${root}/<categoría>/`
   } catch (err) {
-    debugError.value = 'Error cargando carpeta: ' + err
+    console.warn('Permisos de almacenamiento no concedidos:', err)
+  }
+  try {
+    await Filesystem.mkdir({ path: CAP_DEFAULT_ROOT, directory: CAP_DIR, recursive: true })
+  } catch { /* ya existe */ }
+  const acc = await scanDirectory(CAP_DEFAULT_ROOT, 'GENERAL', CAP_DIR)
+  for (const folder of CAP_MUSIC_FOLDERS) {
+    const before = scanCount.value
+    await scanDirectory(folder, 'MÚSICA', Directory.ExternalStorage, acc)
+    if (scanCount.value > before) break
+  }
+  return groupsToLibrary(acc)
+}
+
+const kboxRoot = async () => join(await appDataDir(), CAP_DEFAULT_ROOT)
+
+// Archivos elegidos pendientes de importar: [{ name, data? (base64, Android), path? (Tauri) }]
+const filesToImport = ref([])
+const selectedCategory = ref('')
+const newCategory = ref('')
+const importing = ref(false)
+
+function resetImportModal() {
+  filesToImport.value = []
+  selectedCategory.value = ''
+  newCategory.value = ''
+}
+
+async function pickFilesCapacitor() {
+  let picked
+  try {
+    picked = await FilePicker.pickFiles({ multiple: true, readData: true })
+  } catch (err) {
+    if (!/cancel/i.test(String(err?.message ?? err))) debugError.value = 'Error al elegir archivos: ' + err
+    return []
+  }
+  return picked.files
+    .map(f => ({ name: cleanName(f.name || ''), data: f.data }))
+    .filter(f => f.name && f.data && SUPPORTED.includes(extOf(f.name)))
+}
+
+async function pickFilesTauri() {
+  const picked = await open({ multiple: true, filters: [{ name: 'Audio', extensions: SUPPORTED }] })
+  if (!picked) return []
+  return (Array.isArray(picked) ? picked : [picked])
+    .map(p => ({ name: cleanName(baseName(p)), path: p }))
+    .filter(f => f.name && SUPPORTED.includes(extOf(f.name)))
+}
+
+// Elige los archivos y abre el modal de categorías
+async function importFiles() {
+  if (!(isCapacitor || isTauri)) return
+  try {
+    const files = isCapacitor ? await pickFilesCapacitor() : await pickFilesTauri()
+    if (!files.length) return
+    selectedCategory.value = ''
+    newCategory.value = ''
+    filesToImport.value = files
+  } catch (err) {
+    debugError.value = 'Error al elegir archivos: ' + err
+  }
+}
+
+function addImportedToLibrary(category, sounds) {
+  if (!sounds.length) return
+  const lib = userLibrary.value
+  const idx = lib.findIndex(c => c.name === category)
+  const fresh = new Set(sounds.map(s => s.rawPath))
+  const merged = idx >= 0 ? [...lib[idx].sounds.filter(s => !fresh.has(s.rawPath)), ...sounds] : sounds
+  const entry = { name: category, sounds: sortSounds(merged) }
+  userLibrary.value = idx >= 0 ? lib.map((c, i) => (i === idx ? entry : c)) : [...lib, entry]
+  // Si se sobrescribió un archivo, su Blob en caché ya no es válido
+  for (const p of fresh) {
+    if (blobCache.has(p)) {
+      URL.revokeObjectURL(blobCache.get(p))
+      blobCache.delete(p)
+    }
+  }
+}
+
+async function confirmImport(categoryName) {
+  const category = cleanName(categoryName || '')
+  if (!category) {
+    debugError.value = 'Elige o escribe una categoría'
+    return
+  }
+  if (importing.value) return
+  importing.value = true
+  const added = []
+  let failed = 0
+  let lastErr = ''
+  try {
+    const destDir = isTauri ? await join(await kboxRoot(), category) : null
+    if (destDir) await createDir(destDir, { recursive: true })
+    for (const f of filesToImport.value) {
+      try {
+        if (isCapacitor) {
+          const rawPath = `${CAP_DEFAULT_ROOT}/${category}/${f.name}`
+          await Filesystem.writeFile({ path: rawPath, directory: CAP_DIR, data: f.data, recursive: true })
+          added.push(makeSound(category, f.name, '', rawPath, true))
+        } else {
+          const dest = await join(destDir, f.name)
+          await copyFile(f.path, dest)
+          added.push(makeSound(category, f.name, convertFileSrc(dest), dest, true))
+        }
+      } catch (err) {
+        failed++
+        lastErr = String(err?.message ?? err)
+        console.error('No se pudo escribir en el almacenamiento externo:', f.name, err)
+      }
+    }
+    addImportedToLibrary(category, added)
+    if (failed) debugError.value = `No se pudieron importar ${failed} archivo(s). No se pudo escribir en el almacenamiento externo: ${lastErr}`
+  } catch (err) {
+    console.error('Error importando archivos:', err)
+    debugError.value = 'Error importando archivos: ' + String(err?.message ?? err)
+  } finally {
+    importing.value = false
+    resetImportModal()
+  }
+}
+
+async function deleteImportedSound(s) {
+  if (!s.isImported || !s.rawPath) return
+  if (!window.confirm('¿Seguro que quieres eliminar este audio?')) return
+  try {
+    if (s.playing) stopSound(s)
+    if (isCapacitor) await Filesystem.deleteFile({ path: s.rawPath, directory: CAP_DIR })
+    else if (isTauri) await removeFile(s.rawPath)
+    else return
+  } catch (err) {
+    debugError.value = 'Error eliminando audio: ' + err
+    return
+  }
+  userLibrary.value = userLibrary.value
+    .map(cat => ({ ...cat, sounds: cat.sounds.filter(snd => snd.id !== s.id) }))
+    .filter(cat => cat.sounds.length)
+  // Vacía los slots de mesas que apuntaban a este audio
+  let changed = false
+  for (const w of workspaces.value) {
+    for (const slot of w.slots) {
+      if (slot.sound && (slot.sound.id === s.id || slot.sound.rawPath === s.rawPath)) {
+        const playing = slotSounds.value[slot.id]
+        if (playing?.playing) stopSound(playing)
+        slot.sound = null
+        changed = true
+      }
+    }
+  }
+  releaseBlob(s.rawPath)
+  if (changed) await saveWorkspaces()
+  soundToAssign.value = null
+}
+
+const dirOf = (p) => p.replace(/[\\/][^\\/]*$/, '')
+const isUserCategory = (cat) => cat.sounds.some(s => s.isImported)
+const pathExists = async (p) => {
+  if (isCapacitor) {
+    try { await Filesystem.stat({ path: p, directory: CAP_DIR }); return true } catch { return false }
+  }
+  return exists(p)
+}
+
+async function renameSound(s) {
+  if (!s.isImported || !s.rawPath) return
+  const input = window.prompt('Nuevo nombre:', s.displayName)
+  if (input === null) return
+  const name = cleanName(input).replace(new RegExp(`\\.${s.ext}$`, 'i'), '')
+  if (!name || name === s.displayName) return
+  try {
+    const oldPath = s.rawPath
+    const fileName = `${name}.${s.ext}`
+    let newPath
+    if (isCapacitor) newPath = `${dirOf(oldPath)}/${fileName}`
+    else if (isTauri) newPath = await join(dirOf(oldPath), fileName)
+    else return
+    if (await pathExists(newPath)) throw new Error(`ya existe un audio llamado "${fileName}"`)
+    if (s.playing) stopSound(s)
+    if (isCapacitor) await Filesystem.rename({ from: oldPath, to: newPath, directory: CAP_DIR, toDirectory: CAP_DIR })
+    else await renameFile(oldPath, newPath)
+
+    if (blobCache.has(oldPath)) {
+      URL.revokeObjectURL(blobCache.get(oldPath))
+      blobCache.delete(oldPath)
+    }
+    s.displayName = name
+    s.rawPath = newPath
+    if (isTauri) s.url = convertFileSrc(newPath)
+    userLibrary.value = userLibrary.value.map(cat => (cat.sounds.includes(s) ? { ...cat, sounds: sortSounds([...cat.sounds]) } : cat))
+
+    let changed = false
+    for (const w of workspaces.value) {
+      for (const slot of w.slots) {
+        if (slot.sound?.rawPath === oldPath) {
+          slot.sound = { ...slot.sound, rawPath: newPath, displayName: name }
+          changed = true
+        }
+      }
+    }
+    if (changed) await saveWorkspaces()
+  } catch (err) {
+    console.error('Error cambiando nombre:', err)
+    debugError.value = 'Error cambiando nombre: ' + String(err?.message ?? err)
+  }
+}
+
+async function deleteCategory(catName) {
+  const cat = userLibrary.value.find(c => c.name === catName)
+  const targets = cat ? cat.sounds.filter(s => s.isImported && s.rawPath) : []
+  if (!targets.length) return
+  if (!window.confirm('¿Seguro que quieres eliminar esta categoría y todos sus audios?')) return
+  const deleted = new Set()
+  const dirs = new Set()
+  let failed = 0
+  for (const s of targets) {
+    try {
+      if (s.playing) stopSound(s)
+      if (isCapacitor) await Filesystem.deleteFile({ path: s.rawPath, directory: CAP_DIR })
+      else if (isTauri) await removeFile(s.rawPath)
+      else continue
+      deleted.add(s.rawPath)
+      dirs.add(dirOf(s.rawPath))
+    } catch (err) {
+      failed++
+      console.error('No se pudo eliminar', s.rawPath, err)
+    }
+  }
+  // Borra la carpeta solo si quedó vacía (si no, el rmdir falla y se ignora)
+  for (const dir of dirs) {
+    try {
+      if (isCapacitor) await Filesystem.rmdir({ path: dir, directory: CAP_DIR })
+      else await removeDir(dir)
+    } catch { /* no está vacía o ya no existe */ }
+  }
+  userLibrary.value = userLibrary.value
+    .map(c => (c.name === catName ? { ...c, sounds: c.sounds.filter(s => !deleted.has(s.rawPath)) } : c))
+    .filter(c => c.sounds.length)
+  if (activeCat.value === catName && !combinedLibrary.value.some(c => c.name === catName)) activeCat.value = ''
+
+  let changed = false
+  for (const w of workspaces.value) {
+    for (const slot of w.slots) {
+      if (slot.sound && deleted.has(slot.sound.rawPath)) {
+        const playing = slotSounds.value[slot.id]
+        if (playing?.playing) stopSound(playing)
+        slot.sound = null
+        changed = true
+      }
+    }
+  }
+  for (const p of deleted) releaseBlob(p)
+  if (changed) await saveWorkspaces()
+  if (failed) debugError.value = `No se pudieron eliminar ${failed} audio(s) de la categoría`
+}
+
+// ---- Editor de audio (recorte) ----
+const editingSound = ref(null)
+const waveformRef = ref(null)
+const editStart = ref(0)
+const editEnd = ref(0)
+const editDuration = ref(0)
+const editName = ref('')
+const editCategory = ref('')
+const editPlaying = ref(false)
+const editReady = ref(false)
+const editSaving = ref(false)
+let wavesurfer = null
+
+function destroyWaveSurfer() {
+  if (wavesurfer) {
+    try { wavesurfer.pause() } catch { /* ya detenido */ }
+    try { wavesurfer.destroy() } catch (err) { console.warn(err) }
+    wavesurfer = null
+  }
+  editPlaying.value = false
+  editReady.value = false
+}
+
+function openEditor(s) {
+  if (!s.isImported || !s.rawPath) return
+  stopAll()
+  editStart.value = 0
+  editEnd.value = 0
+  editDuration.value = 0
+  editName.value = `${s.displayName}_recortado`
+  editCategory.value = s.category
+  soundToAssign.value = null
+  editingSound.value = s
+}
+
+function closeEditor() {
+  destroyWaveSurfer()
+  editingSound.value = null
+}
+
+watch(editingSound, async (s) => {
+  destroyWaveSurfer()
+  if (!s) return
+  await nextTick()
+  if (editingSound.value !== s || !waveformRef.value) return
+  try {
+    const url = await getBlobUrl(s.rawPath, s.ext)
+    if (editingSound.value !== s) return
+    const ws = WaveSurfer.create({
+      container: waveformRef.value,
+      url,
+      sampleRate: 48000,
+      height: 128,
+      waveColor: '#71717a',
+      progressColor: '#a3e635',
+      cursorColor: '#ffffff'
+    })
+    wavesurfer = ws
+    ws.on('ready', (dur) => {
+      editDuration.value = dur
+      editStart.value = 0
+      editEnd.value = dur
+      editReady.value = true
+    })
+    ws.on('play', () => { editPlaying.value = true })
+    ws.on('pause', () => { editPlaying.value = false })
+    ws.on('finish', () => { editPlaying.value = false })
+    ws.on('timeupdate', (t) => { if (t >= editEnd.value) ws.pause() })
+    ws.on('error', (err) => { debugError.value = 'Error cargando audio en el editor: ' + err })
+  } catch (err) {
+    debugError.value = 'Error abriendo editor: ' + err
+  }
+})
+
+function toggleEditPlay() {
+  if (!wavesurfer || !editReady.value) return
+  if (!wavesurfer.isPlaying()) {
+    const t = wavesurfer.getCurrentTime()
+    if (t < editStart.value || t >= editEnd.value) wavesurfer.setTime(editStart.value)
+  }
+  wavesurfer.playPause()
+}
+
+const editGap = () => Math.min(0.1, editDuration.value / 2)
+
+function onStartInput() {
+  const gap = editGap()
+  if (editStart.value >= editEnd.value) editStart.value = Math.max(0, editEnd.value - gap)
+  if (wavesurfer && editDuration.value) wavesurfer.seekTo(editStart.value / editDuration.value)
+}
+
+function onEndInput() {
+  const gap = editGap()
+  if (editEnd.value <= editStart.value) editEnd.value = Math.min(editDuration.value, editStart.value + gap)
+  if (wavesurfer && editDuration.value) wavesurfer.seekTo(editEnd.value / editDuration.value)
+}
+
+function bytesToBase64(bytes) {
+  let bin = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
+  return btoa(bin)
+}
+
+async function saveClip() {
+  const s = editingSound.value
+  if (!s || !wavesurfer || !editReady.value || editSaving.value) return
+  const category = cleanName(editCategory.value || '')
+  const base = cleanName(editName.value || '').replace(/\.wav$/i, '')
+  if (!category || !base) {
+    debugError.value = 'Escribe un nombre y elige una categoría'
+    return
+  }
+  editSaving.value = true
+  let ctx = null
+  try {
+    const src = wavesurfer.getDecodedData()
+    if (!src) throw new Error('el audio aún no está decodificado')
+    const from = Math.max(0, Math.floor(editStart.value * src.sampleRate))
+    const to = Math.min(src.length, Math.ceil(editEnd.value * src.sampleRate))
+    if (to - from < 1) throw new Error('el recorte está vacío')
+
+    ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const clip = ctx.createBuffer(src.numberOfChannels, to - from, src.sampleRate)
+    for (let ch = 0; ch < src.numberOfChannels; ch++) {
+      clip.copyToChannel(src.getChannelData(ch).slice(from, to), ch)
+    }
+    const wav = new Uint8Array(audioBufferToWav(clip))
+    const fileName = `${base}.wav`
+    let rawPath
+
+    if (isCapacitor) {
+      rawPath = `${CAP_DEFAULT_ROOT}/${category}/${fileName}`
+      if (rawPath === s.rawPath) await Filesystem.deleteFile({ path: rawPath, directory: CAP_DIR })
+      await Filesystem.writeFile({ path: rawPath, directory: CAP_DIR, data: bytesToBase64(wav), recursive: true })
+    } else if (isTauri) {
+      const dir = await join(await kboxRoot(), category)
+      await createDir(dir, { recursive: true })
+      rawPath = await join(dir, fileName)
+      if (rawPath === s.rawPath) await removeFile(rawPath)
+      await writeBinaryFile(rawPath, wav)
+    } else {
+      throw new Error('plataforma no soportada')
+    }
+
+    if (rawPath === s.rawPath && s.playing) stopSound(s)
+    // Si reemplazó al original con otra ruta/nombre idéntico, addImportedToLibrary lo sobrescribe por rawPath
+    const sound = makeSound(category, fileName, isTauri ? convertFileSrc(rawPath) : '', rawPath, true)
+    addImportedToLibrary(category, [sound])
+    closeEditor()
+  } catch (err) {
+    debugError.value = 'Error guardando recorte: ' + err
+  } finally {
+    if (ctx) ctx.close().catch(() => {})
+    editSaving.value = false
+  }
+}
+
+// Tauri: copia la carpeta completa (con subcarpetas) a $APPDATA/KBOX/<nombre>/
+async function importFolderTauri() {
+  try {
+    const src = await open({ directory: true, multiple: false })
+    if (!src || Array.isArray(src)) return
+    const dest = await join(await kboxRoot(), cleanName(baseName(src)) || 'IMPORTADO')
+    await createDir(dest, { recursive: true })
+    const copyEntries = async (entries, targetDir) => {
+      for (const en of entries) {
+        if (!en.name || en.name.startsWith('.')) continue
+        if (en.children) {
+          const sub = await join(targetDir, en.name)
+          await createDir(sub, { recursive: true })
+          await copyEntries(en.children, sub)
+        } else if (SUPPORTED.includes(extOf(en.name))) {
+          await copyFile(en.path, await join(targetDir, en.name))
+        }
+      }
+    }
+    await copyEntries(await readDir(src, { recursive: true }), dest)
+  } catch (err) {
+    debugError.value = 'Error importando carpeta: ' + err
+    return
+  }
+  await syncLibrary()
+}
+
+async function syncTauri() {
+  const root = await kboxRoot()
+  if (!(await exists(root))) await createDir(root, { recursive: true })
+  return loadLibraryFromPath(root, { byParent: true, imported: true })
+}
+
+const importFolder = () => (isCapacitor ? importFiles() : importFolderTauri())
+
+async function syncLibrary() {
+  if (isScanning.value || !(isCapacitor || isTauri)) return
+  isScanning.value = true
+  scanCount.value = 0
+  stopAll()
+  userLibrary.value = []
+  loadedRoots.clear()
+  activeCat.value = ''
+  try {
+    userLibrary.value = isCapacitor ? await syncCapacitor() : await syncTauri()
+    // Rutas externas guardadas por versiones anteriores
+    if (isTauri) await loadUserRoutes()
+  } catch (err) {
+    debugError.value = 'Error sincronizando: ' + err
+  } finally {
+    isScanning.value = false
   }
 }
 
 // Escanea una carpeta raíz y devuelve [{name, sounds}].
 // byParent=false: categoría = subcarpeta de primer nivel (usuario).
 // byParent=true: categoría = carpeta inmediata del archivo; sueltos en la raíz -> GENERAL.
-async function loadLibraryFromPath(root, { byParent = false } = {}) {
+async function loadLibraryFromPath(root, { byParent = false, imported = false } = {}) {
   const top = await readDir(root, { recursive: true })
   const groups = new Map()
   const add = (cat, f) => {
     if (!groups.has(cat)) groups.set(cat, [])
     groups.get(cat).push(f)
+    scanCount.value++
   }
   const walk = (entries, parentName, topName) => {
     for (const en of entries) {
@@ -338,7 +864,7 @@ async function loadLibraryFromPath(root, { byParent = false } = {}) {
   const cats = []
   for (const [name, files] of groups) {
     const sounds = files
-      .map(f => makeSound(name, f.name, convertFileSrc(f.path), f.path))
+      .map(f => makeSound(name, f.name, convertFileSrc(f.path), f.path, imported))
       .sort((x, y) => x.displayName.localeCompare(y.displayName, undefined, { numeric: true }))
     cats.push({ name, sounds })
   }
@@ -426,20 +952,33 @@ async function getWorkspacesFilePath() {
   return join(await appConfigDir(), 'workspaces.json')
 }
 
+const serializeWorkspaces = () => JSON.stringify(workspaces.value.map(w => ({ id: w.id, name: w.name, slots: sanitizeSlots(w.slots) })), null, 2)
+
 async function saveWorkspaces() {
   try {
-    await createDir(await appConfigDir(), { recursive: true })
-    await writeTextFile(await getWorkspacesFilePath(), JSON.stringify(workspaces.value.map(w => ({ id: w.id, name: w.name, slots: sanitizeSlots(w.slots) })), null, 2))
+    if (isTauri) {
+      await createDir(await appConfigDir(), { recursive: true })
+      await writeTextFile(await getWorkspacesFilePath(), serializeWorkspaces())
+    } else if (isCapacitor) {
+      await Preferences.set({ key: WORKSPACES_PREF_KEY, value: serializeWorkspaces() })
+    }
   } catch (err) {
-    debugError.value = 'Error guardando mesas: ' + err
+    console.error('Error guardando mesas:', err)
   }
 }
 
 async function loadWorkspaces() {
   try {
-    const file = await getWorkspacesFilePath()
-    if (!(await exists(file))) return
-    const data = JSON.parse(await readTextFile(file))
+    let raw = null
+    if (isTauri) {
+      const file = await getWorkspacesFilePath()
+      if (!(await exists(file))) return
+      raw = await readTextFile(file)
+    } else if (isCapacitor) {
+      raw = (await Preferences.get({ key: WORKSPACES_PREF_KEY })).value
+    }
+    if (!raw) return
+    const data = JSON.parse(raw)
     if (!Array.isArray(data)) return
     workspaces.value = data.map(w => ({
       id: w.id,
@@ -450,18 +989,7 @@ async function loadWorkspaces() {
         : WORKSPACE_KEYS.map(k => ({ id: newSlotId(), key: k, sound: sanitizeDescriptor(w.keys?.[k]) }))
     }))
   } catch (err) {
-    console.warn('No se pudo leer workspaces.json:', err)
-  }
-}
-
-async function saveRoute(newPath) {
-  try {
-    const routes = await readRoutes()
-    if (!routes.includes(newPath)) routes.push(newPath)
-    await createDir(await appConfigDir(), { recursive: true })
-    await writeTextFile(await getRoutesFilePath(), JSON.stringify(routes, null, 2))
-  } catch (err) {
-    debugError.value = 'Error guardando ruta: ' + err
+    console.error('No se pudieron leer las mesas:', err)
   }
 }
 
@@ -487,7 +1015,7 @@ const blobCache = new Map() // rawPath -> blobUrl
 const blobPending = new Map() // rawPath -> Promise<blobUrl>
 
 async function readCapacitorFile(path) {
-  const { data } = await Filesystem.readFile({ path, directory: CAP_DIR })
+  const { data } = await Filesystem.readFile({ path, directory: capDirFor(path) })
   if (typeof data !== 'string') return data // Blob (web)
   const bin = atob(data)
   const bytes = new Uint8Array(bin.length)
@@ -772,13 +1300,46 @@ onMounted(async () => {
   window.addEventListener('keydown', onKey, true)
   if (isTauri) {
     await loadDefaultSounds()
-    await loadUserRoutes()
+    await syncLibrary()
     await loadWorkspaces()
   } else if (isCapacitor) {
+    await loadWorkspaces()
     await loadDefaultSoundsCapacitor()
-    const { value } = await Preferences.get({ key: CAP_PREF_KEY })
-    if (value) await loadFromCapacitor(value)
+    await syncLibrary()
   }
 })
 onUnmounted(() => { window.removeEventListener('keydown', onKey, true); stopAll() })
 </script>
+
+<style>
+/* Dos sliders superpuestos: solo los pulgares reciben el puntero */
+.range-dual {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  margin: 0;
+}
+.range-dual::-webkit-slider-runnable-track { background: transparent; height: 100%; }
+.range-dual::-moz-range-track { background: transparent; height: 100%; }
+.range-dual::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 14px;
+  height: 56px;
+  background: #fff;
+  border: 1px solid #a3e635;
+  border-radius: 3px;
+  cursor: ew-resize;
+}
+.range-dual::-moz-range-thumb {
+  pointer-events: auto;
+  width: 14px;
+  height: 56px;
+  background: #fff;
+  border: 1px solid #a3e635;
+  border-radius: 3px;
+  cursor: ew-resize;
+}
+</style>
